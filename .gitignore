@@ -2,6 +2,7 @@
 venv/
 tradeform_env/
 
+
 # Игнорировать конфигурации среды разработки
 .idea/
 
@@ -18,3 +19,4 @@ data/
 *.log
 *.tmp
 *.out
+*.env
