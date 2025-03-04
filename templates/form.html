@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Исторические данные</title>
+    <script src="https://cdn.plot.ly/plotly-2.20.0.min.js"></script>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        header {
+            padding: 20px;
+            background-color: #f5f5f5;
+            border-bottom: 1px solid #ddd;
+        }
+        header form {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        #main-content {
+            display: flex;
+            flex-direction: row;
+            height: calc(100vh - 100px);
+        }
+        #table-container {
+            width: 30%; /* Таблица занимает 30% ширины */
+            padding: 0px;
+            overflow-y: auto;
+        }
+        #chart-container {
+            flex: 1; /* Остальная часть для графика и симуляции */
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+        }
+        #chart {
+            height: 70%; /* График занимает верхнюю часть */
+        }
+        #strategy-simulation {
+            height: 30%; /* Симуляция занимает оставшиеся 30% */
+            border-top: 1px solid #ddd;
+            padding: 0px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        table, th, td {
+            border: 1px solid #ccc;
+        }
+        th, td {
+            padding: 2px 4px; /* Уменьшены отступы по горизонтали */
+            text-align: center; /* Выравнивание по центру */
+            font-size: 12px; /* Компактный шрифт */
+        }
+        th {
+            position: sticky;
+            top: 0;
+            background-color: #f0f0f0;
+        }
+        #chart {
+            width: 100%;
+        }
+        #date-selector {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <form method="POST" action="/TradeForm/fetch-data/">
+            <label for="ticker">Тикер:</label>
+            <input type="text" name="ticker" required>
+            <label for="start_date">Начало:</label>
+            <input type="date" name="start_date" required>
+            <label for="end_date">Конец:</label>
+            <input type="date" name="end_date" required>
+            <label>
+                <input type="checkbox" name="include_charts" checked> Графики
+            </label>
+            <button type="submit">Получить данные</button>
+        </form>
+    </header>
+    <div id="main-content">
+        <div id="table-container">
+            {% if data %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Дата</th>
+                        <th>Откр</th>
+                        <th>Макс</th>
+                        <th>Мин</th>
+                        <th>Закр</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in data %}
+                    <tr>
+                        <td>{{ row.timestamp }}</td>
+                        <td>{{ row.open }}</td>
+                        <td>{{ row.high }}</td>
+                        <td>{{ row.low }}</td>
+                        <td>{{ row.close }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p>Данные не загружены. Пожалуйста, выполните запрос.</p>
+            {% endif %}
+        </div>
+        <div id="chart-container">
+            <div id="date-selector">
+                {% if unique_dates %}
+                <label for="dates">Выберите дату:</label>
+                <select id="dates" onchange="fetchChartForDate(this.value)">
+                    {% for date in unique_dates %}
+                    <option value="{{ date }}">{{ date }}</option>
+                    {% endfor %}
+                </select>
+                {% endif %}
+            </div>
+            <div id="chart"></div>
+            <div id="strategy-simulation">
+                <div style="height: 100%; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr>
+                                <th style="border: 1px solid #ccc; padding: 4px; background-color: #f0f0f0; font-size: 12px;">Дата</th>
+                                <th style="border: 1px solid #ccc; padding: 4px; background-color: #f0f0f0; font-size: 12px;">FCTime (UTC)</th>
+                                <th style="border: 1px solid #ccc; padding: 4px; background-color: #f0f0f0; font-size: 12px;">FCOpen</th>
+                                <th style="border: 1px solid #ccc; padding: 4px; background-color: #f0f0f0; font-size: 12px;">FCClose</th>
+                                <th style="border: 1px solid #ccc; padding: 4px; background-color: #f0f0f0; font-size: 12px;">dCO</th>
+                                <th style="border: 1px solid #ccc; padding: 4px; background-color: #f0f0f0; font-size: 12px;">dCOmin</th>
+                                <th style="border: 1px solid #ccc; padding: 4px; background-color: #f0f0f0; font-size: 12px;">TradeType</th>
+                                <th style="border: 1px solid #ccc; padding: 4px; background-color: #f0f0f0; font-size: 12px;">StopLoss</th>
+                                <th style="border: 1px solid #ccc; padding: 4px; background-color: #f0f0f0; font-size: 12px;">ProfitTake</th>
+                                <th style="border: 1px solid #ccc; padding: 4px; background-color: #f0f0f0; font-size: 12px;">CPTime</th>
+                                <th style="border: 1px solid #ccc; padding: 4px; background-color: #f0f0f0; font-size: 12px;">CPPrice</th>
+                                <th style="border: 1px solid #ccc; padding: 4px; background-color: #f0f0f0; font-size: 12px;">TradeResult</th>
+                                <th style="border: 1px solid #ccc; padding: 4px; background-color: #f0f0f0; font-size: 12px;">Income</th>
+                                <th style="border: 1px solid #ccc; padding: 4px; background-color: #f0f0f0; font-size: 12px;">Income%</th>
+
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if fctime_data %}
+                                {% for row in fctime_data %}
+                                <tr>
+                                    <td style="border: 1px solid #ccc; padding: 4px; text-align: center; font-size: 12px;">
+                                        {{ row.date }}
+                                    </td>
+                                    <td style="border: 1px solid #ccc; padding: 4px; text-align: center; font-size: 12px;">
+                                        {{ row.FCTime }}
+                                    </td>
+                                    <td style="border: 1px solid #ccc; padding: 4px; text-align: center; font-size: 12px;">
+                                        {{ row.FCOpen }}
+                                    </td>
+                                    <td style="border: 1px solid #ccc; padding: 4px; text-align: center; font-size: 12px;">
+                                        {{ row.FCClose }}
+                                    </td>
+                                    <td style="border: 1px solid #ccc; padding: 4px; text-align: center; font-size: 12px;">
+                                        {{ row.dCO }}
+                                    </td>
+                                    <td style="border: 1px solid #ccc; padding: 4px; text-align: center; font-size: 12px;">
+                                        {{ row.dCOmin }}
+                                    </td>
+                                    <td style="border: 1px solid #ccc; padding: 4px; text-align: center; font-size: 12px;">
+                                        {{ row.TradeType }}
+                                    </td>
+                                    <td style="border: 1px solid #ccc; padding: 4px; text-align: center; font-size: 12px;">
+                                        {{ row.StopLoss }}
+                                    </td>
+                                    <td style="border: 1px solid #ccc; padding: 4px; text-align: center; font-size: 12px;">
+                                        {{ row.ProfitTake }}
+                                    </td>
+                                    <td style="border: 1px solid #ccc; padding: 4px; text-align: center; font-size: 12px;">
+                                        {{ row.CPTime }}
+                                    </td>
+                                    <td style="border: 1px solid #ccc; padding: 4px; text-align: center; font-size: 12px;">
+                                        {{ row.CPPrice }}
+                                    </td>
+                                    <td style="border: 1px solid #ccc; padding: 4px; text-align: center; font-size: 12px;">
+                                        {{ row.TradeResult }}
+                                    </td>
+                                    <td style="border: 1px solid #ccc; padding: 4px; text-align: center; font-size: 12px;">
+                                        {{ row.Income }}
+                                    </td>
+                                    <td style="border: 1px solid #ccc; padding: 4px; text-align: center; font-size: 12px;{% if row['IncomePr'] > 0 %}
+                                            background-color: green; color: white;
+                                        {% elif row['IncomePr'] < 0 %}
+                                            background-color: red; color: white;
+                                        {% endif %}">
+                                        {{ row.IncomePr }}
+                                    </td>
+
+
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="6" style="border: 1px solid #ccc; padding: 4px; text-align: center; font-size: 12px;">
+                                        Данные отсутствуют
+                                    </td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+                <!-- Добавляем строку результата торгов -->
+                <div style="margin-top: 10px; font-size: 10px;">
+                    {% set total_days = fctime_data|length %}
+                    {% set total_income_pr = fctime_data|sum(attribute='IncomePr') %}
+                    {% set no_trade_days = fctime_data|selectattr("TradeType", "equalto", "NoTrade")|list|length %}
+                    {% set profit_take_days = fctime_data|selectattr("TradeResult", "equalto", "ProfitTake")|list|length %}
+                    {% set stop_loss_days = fctime_data|selectattr("TradeResult", "equalto", "StopLoss")|list|length %}
+                    {% set end_day_days = fctime_data|selectattr("TradeResult", "equalto", "EndDay")|list|length %}
+                    <p>
+                        Результат торгов за {{ total_days }} дней =
+                        <span style="
+                            {% if total_income_pr > 0 %}
+                                color: green;
+                            {% elif total_income_pr < 0 %}
+                                color: red;
+                            {% else %}
+                                color: black;
+                            {% endif %}
+                        ">
+                            {{ total_income_pr|round(2) }}%
+                        </span>,
+                        при этом NoTrade дней = {{ no_trade_days }},
+                        дней со сработавшим ProfitTake = {{ profit_take_days }},
+                        дней со сработавшим StopLoss = {{ stop_loss_days }},
+                        дней со сработавшим EndDay = {{ end_day_days }}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+<script>
+    async function fetchChartForDate(date) {
+        const ticker = "{{ ticker }}";
+        const response = await fetch(`/TradeForm/chart-data/${ticker}/${date}`);
+        const data = await response.json();
+
+        if (response.ok) {
+
+
+            // Извлечение StopLoss и ProfitTake из таблицы
+            const rows = document.querySelectorAll('#strategy-simulation tbody tr');
+            let stopLoss = null;
+            let profitTake = null;
+            let fcTime = null;
+            let CPTime = null;
+
+
+            rows.forEach(row => {
+                const rowDate = row.cells[0].textContent.trim();
+                if (rowDate === date) {
+                    stopLoss = parseFloat(row.cells[7].textContent.trim());
+                    profitTake = parseFloat(row.cells[8].textContent.trim());
+                    fcTime = row.cells[1].textContent.trim();  // Извлекаем FCTime (UTC)
+                    fcTimeCombined = `${date} ${fcTime}:00`;
+                    CPTime = row.cells[9].textContent.trim();  // Извлекаем CPTime
+                    CPTimeCombined = `${date} ${CPTime}`;
+
+                }
+            });
+
+            const layout = {
+                title: {
+                    text: `График японских свечей: ${ticker} (${date})`,
+                    font: { size: 16 },
+                },
+                yaxis: {autorange: true },
+
+                margin: { t: 30, b: 30 },
+                shapes: [],
+            };
+
+            // Добавление линий StopLoss и ProfitTake
+            if (stopLoss !== null) {
+                layout.shapes.push({
+                    type: 'line',
+                    x0: data.timestamp[0],
+                    x1: data.timestamp[data.timestamp.length - 1],
+                    y0: stopLoss,
+                    y1: stopLoss,
+                    line: { color: 'red', width: 2, dash: 'dot' },
+                });
+            }
+            if (profitTake !== null) {
+                layout.shapes.push({
+                    type: 'line',
+                    x0: data.timestamp[0],
+                    x1: data.timestamp[data.timestamp.length - 1],
+                    y0: profitTake,
+                    y1: profitTake,
+                    line: { color: 'green', width: 2, dash: 'dot' },
+                });
+            }
+
+             // Добавление вертикальной линии для FCTime (UTC)
+            if (fcTime) {
+                layout.shapes.push({
+                    type: 'line',
+                    x0: fcTimeCombined,
+                    x1: fcTimeCombined,
+                    y0: Math.min(...data.low),
+                    y1: Math.max(...data.high),
+                    line: { color: 'blue', width: 2, dash: 'dot' },
+                });
+            }
+
+            // Добавление вертикальной линии для CPTime
+            if (CPTime) {
+                layout.shapes.push({
+                    type: 'line',
+                    x0: CPTimeCombined,
+                    x1: CPTimeCombined,
+                    y0: Math.min(...data.low),
+                    y1: Math.max(...data.high),
+                    line: { color: 'purple', width: 2, dash: 'dot' },
+                });
+            }
+
+            // Создание графика японских свечей
+            const trace = {
+                x: data.timestamp,
+                open: data.open,
+                high: data.high,
+                low: data.low,
+                close: data.close,
+                type: 'candlestick',
+            };
+
+            Plotly.newPlot('chart', [trace], layout);
+        } else {
+            document.getElementById("chart").innerHTML = `<p>${data.error}</p>`;
+        }
+    }
+
+    {% if unique_dates %}
+    fetchChartForDate("{{ unique_dates[0] }}");
+    {% endif %}
+</script>
+</body>
+</html>
